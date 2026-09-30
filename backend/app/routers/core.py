@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/core", tags=["岩心管理"])
 service = CoreService()
 
 LIST_FIELDS = ["岩心编号", "所属钻孔", "取样深度起", "取样深度止", "岩性描述", "采取率", "存放位置", "样本状态"]
-STATUSES = ["待编录", "已编录", "送样中", "已归还"]
+STATUSES = ["待编录", "已编录", "待复检", "送样中", "已归还"]
 
 
 @router.get("", response_model=PageResult[dict])
