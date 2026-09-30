@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '@/views/Dashboard.vue'
 const Borehole = () => import('@/views/borehole/index.vue')
 const Core = () => import('@/views/core/index.vue')
+const QualityVersions = () => import('@/views/quality_versions/index.vue')
 const Stratigraphy = () => import('@/views/stratigraphy/index.vue')
 const Geophysics = () => import('@/views/geophysics/index.vue')
 const Geochem = () => import('@/views/geochem/index.vue')
@@ -26,6 +27,7 @@ const router = createRouter({
     { path: '/', name: 'dashboard', component: Dashboard },
     { path: '/borehole', name: 'borehole', component: Borehole },
     { path: '/core', name: 'core', component: Core },
+    { path: '/quality_versions', name: 'quality_versions', component: QualityVersions },
     { path: '/stratigraphy', name: 'stratigraphy', component: Stratigraphy },
     { path: '/geophysics', name: 'geophysics', component: Geophysics },
     { path: '/geochem', name: 'geochem', component: Geochem },

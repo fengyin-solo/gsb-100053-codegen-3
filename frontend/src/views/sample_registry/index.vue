@@ -6,10 +6,13 @@
         <p class="page-desc">维护送检样品，围绕送检编号、样品名称、采样位置、检测项目做登记、筛选与状态流转。</p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记送检样品</button>
         <button class="btn" type="button" @click="exportRows">导出样品登记清单</button>
       </div>
     </header>
+
+    <div class="callout">
+      关联岩心的检验结论实时读取岩心台账同一份判定；「送样冻结口径」是送样当时版本的留档，阈值换版也不会改动。
+    </div>
 
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
@@ -31,12 +34,27 @@
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th>检验结论（台账同步）</th>
+          <th>送样冻结口径（留档）</th>
           <th>可执行动作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td>
+            <template v-if="row['岩心编号'] && row['检验结论']">
+              <span :class="['tag', row['检验结论'] === '合格' ? 'tag-ok' : 'tag-bad']">{{ row['检验结论'] }}</span>
+              <span class="muted">{{ row['判定版本号'] }} · 阈值 ≥ {{ row['判定阈值'] }}%</span>
+            </template>
+            <span v-else class="muted">非岩心送检，无同步结论</span>
+          </td>
+          <td>
+            <template v-if="row['送样冻结版本号']">
+              <span class="muted">{{ row['送样冻结结论'] }} · {{ row['送样冻结版本号'] }}（≥ {{ row['送样冻结阈值'] }}%）</span>
+            </template>
+            <span v-else class="muted">—</span>
+          </td>
           <td class="row-actions">
             <button
               v-for="action in actions"
@@ -50,7 +68,7 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 1" class="empty-state">暂无样品登记数据，可先登记送检样品</td>
+          <td :colspan="columns.length + 3" class="empty-state">暂无样品登记数据</td>
         </tr>
       </tbody>
     </table>
@@ -70,7 +88,7 @@ import { request } from '@/api/client'
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/sample_registry'
-const columns = ["送检编号", "样品名称", "采样位置", "检测项目", "送检单位", "收样日期", "检测周期", "送检状态"]
+const columns = ["送检编号", "岩心编号", "样品名称", "采样位置", "检测项目", "送检单位", "收样日期", "送检状态"]
 const actions = ["确认收样", "登记报告", "退回样品"]
 const statuses = ["待收样", "已收样", "检测中", "已出报告"]
 const stats = [{"label": "待收样品", "value": 0}, {"label": "检测中样品", "value": 0}, {"label": "已出报告", "value": 0}]
@@ -99,7 +117,7 @@ async function runAction(action: string, row: Row) {
   try {
     const response = await request(`${ENDPOINT}/${row.id}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: { action } }),
     })
     if (!response.ok) {
       throw new Error('样品登记动作未生效，请稍后重试')

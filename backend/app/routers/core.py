@@ -1,4 +1,8 @@
-"""岩心管理接口：维护岩心样本，覆盖地质编录、送样分析、归还原箱等动作。"""
+"""岩心管理接口：维护岩心样本，覆盖地质编录、复检确认、送样分析、归还原箱等动作。
+
+质量阈值判定不在本层实现，统一走 services 里的版本生效台与判定引擎；
+``/review-todos`` 给编录待办读，样品登记模块的送样清单投影也读同一份台账判定。
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -13,13 +17,13 @@ router = APIRouter(prefix="/api/core", tags=["岩心管理"])
 service = CoreService()
 
 LIST_FIELDS = ["岩心编号", "所属钻孔", "取样深度起", "取样深度止", "岩性描述", "采取率", "存放位置", "样本状态"]
-STATUSES = ["待编录", "已编录", "送样中", "已归还"]
+STATUSES = ["待编录", "待复检", "已编录", "送样中", "已归还"]
 
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按岩心编号检索"),
-    status: str | None = Query(default=None, description="待编录、已编录、送样中、已归还"),
+    status: str | None = Query(default=None, description="待编录、待复检、已编录、送样中、已归还"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
@@ -28,6 +32,20 @@ def list_entries(
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/review-todos")
+def review_todos() -> dict[str, Any]:
+    """编录待办：口径换版后按新口径重算、等待复检的岩心队列。"""
+    items = service.review_todos()
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出岩心管理清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "core", "total": total, "items": items}
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -41,25 +59,20 @@ def get_entry(entry_id: int) -> dict:
 
 @router.post("", response_model=ActionResult)
 def create_entry(payload: EntryPayload) -> ActionResult:
-    """登记一条岩心样本，缺字段时说明原因而不是静默丢弃。"""
+    """登记一条岩心样本，缺字段或编号重复时说明原因而不是静默丢弃。"""
     entry, missing = service.create_entry(payload.values)
     if missing:
+        if missing == ["岩心编号"]:
+            return ActionResult(ok=False, message="岩心编号已存在，不能重复登记")
         return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
     return ActionResult(ok=True, message="岩心样本已登记", entry=entry)
 
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条岩心样本执行地质编录、送样分析、归还原箱；不允许的动作会被拦下并说明原因。"""
+    """对单条岩心样本执行地质编录、复检确认、送样分析、归还原箱；不允许的动作会被拦下并说明原因。"""
     action = str(payload.values.get("action") or "").strip()
     entry, message = service.run_action(entry_id, action)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出岩心管理清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "core", "total": total, "items": items}

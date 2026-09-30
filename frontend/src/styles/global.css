@@ -33,3 +33,34 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .link { border: none; background: none; color: var(--brand); cursor: pointer; padding: 0; }
 .page-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .error-text { color: #b42318; }
+.muted { color: var(--muted); font-size: 12px; }
+.link.danger { color: #b42318; }
+.btn.warn { background: #b54708; border-color: #b54708; color: #fff; }
+.btn.small { padding: 3px 10px; font-size: 12px; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
+.tag-ok { background: #e7f6ec; color: #1a7f37; }
+.tag-bad { background: #fdeaea; color: #b42318; }
+.tag-warn { background: #fdf1e3; color: #b54708; }
+.tag-info { background: #e8f0fe; color: #1f6feb; }
+.tag-idle { background: #eef2f6; color: #64748b; }
+.callout { border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; }
+.callout.warn { background: #fdf1e3; border: 1px solid #f0c197; color: #7c3a08; }
+.rule-cell { min-width: 260px; }
+.rule-line { font-size: 12px; line-height: 1.7; }
+.verdict-cell { min-width: 180px; }
+.verdict-cell .muted { display: block; margin-top: 2px; }
+.todo-panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.todo-panel h3 { margin: 0 0 8px; font-size: 14px; }
+.todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.todo-list li { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.todo-code { font-weight: 600; min-width: 92px; }
+.modal-mask { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 20; }
+.modal { background: #fff; border-radius: 10px; padding: 18px 20px; width: 720px; max-width: 92vw; max-height: 88vh; overflow: auto; }
+.modal h3 { margin: 0 0 12px; }
+.form-line { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.form-line span { width: 64px; color: var(--muted); font-size: 13px; }
+.form-line input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.rule-edit-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.rule-edit-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+.rule-edit-row input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

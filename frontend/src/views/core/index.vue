@@ -2,11 +2,14 @@
   <section class="page" data-module="core">
     <header class="page-head">
       <div>
-        <h2>岩心管理管理</h2>
-        <p class="page-desc">维护岩心样本，围绕岩心编号、所属钻孔、取样深度起、取样深度止做登记、筛选与状态流转。</p>
+        <h2>岩心管理</h2>
+        <p class="page-desc">
+          岩心样本按所属钻孔与取样深度区间套用「版本生效台」的生效阈值；换版发布时已编录岩心按新口径重算并转入待复检，
+          送样结论按送样当时版本冻结留档。
+        </p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记岩心样本</button>
+        <RouterLink class="btn" to="/quality_versions">前往版本生效台</RouterLink>
         <button class="btn" type="button" @click="exportRows">导出岩心管理清单</button>
       </div>
     </header>
@@ -19,27 +22,65 @@
     </div>
 
     <form class="filter-bar" @submit.prevent="reload">
-      <label v-for="field in filterFields" :key="field" class="filter-item">
-        <span>{{ field }}</span>
-        <input v-model="filters[field]" :placeholder="`按${field}检索`" />
+      <label class="filter-item">
+        <span>岩心编号</span>
+        <input v-model="keyword" placeholder="按岩心编号检索" />
+      </label>
+      <label class="filter-item">
+        <span>业务状态</span>
+        <select v-model="statusFilter">
+          <option value="">全部</option>
+          <option v-for="state in statuses" :key="state" :value="state">{{ state }}</option>
+        </select>
       </label>
       <button class="btn" type="submit">查询</button>
       <button class="btn ghost" type="button" @click="resetFilters">重置条件</button>
     </form>
 
+    <section v-if="todoRows.length" class="todo-panel">
+      <h3>编录待办（换版重算后待复检，共 {{ todoRows.length }} 件）</h3>
+      <ul class="todo-list">
+        <li v-for="row in todoRows" :key="`todo-${row.id}`">
+          <span class="todo-code">{{ row['岩心编号'] }}</span>
+          <span>{{ row['所属钻孔'] }} · {{ row['取样深度起'] }}~{{ row['取样深度止'] }}m</span>
+          <span :class="['tag', row['检验结论'] === '合格' ? 'tag-ok' : 'tag-bad']">
+            {{ row['检验结论'] }}（{{ row['判定版本号'] }}，阈值 ≥ {{ row['判定阈值'] }}%）
+          </span>
+          <button class="link" type="button" @click="runAction('复检确认', row)">复检确认</button>
+        </li>
+      </ul>
+    </section>
+
     <table class="data-table">
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th>业务状态</th>
+          <th>检验结论 / 口径</th>
+          <th>送样留档</th>
           <th>可执行动作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td><span :class="['tag', stateClass(row.status)]">{{ row.status }}</span></td>
+          <td class="verdict-cell">
+            <template v-if="row['判定版本号']">
+              <span :class="['tag', row['检验结论'] === '合格' ? 'tag-ok' : 'tag-bad']">{{ row['检验结论'] }}</span>
+              <span class="muted">{{ row['判定版本号'] }} · {{ row['判定规则'] }}</span>
+            </template>
+            <span v-else class="muted">未编录，暂无判定</span>
+          </td>
+          <td class="verdict-cell">
+            <template v-if="row['送样冻结版本号']">
+              <span class="muted">{{ row['送样编号'] }} · {{ row['送样冻结结论'] }} · {{ row['送样冻结版本号'] }}</span>
+            </template>
+            <span v-else class="muted">—</span>
+          </td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in actionsFor(row.status)"
               :key="action"
               class="link"
               type="button"
@@ -47,42 +88,69 @@
             >
               {{ action }}
             </button>
+            <span v-if="!actionsFor(row.status).length" class="muted">—</span>
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 1" class="empty-state">暂无岩心管理数据，可先登记岩心样本</td>
+          <td :colspan="columns.length + 4" class="empty-state">暂无岩心样本</td>
         </tr>
       </tbody>
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条岩心管理记录</span>
+      <span>共 {{ total }} 条岩心记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { request } from '@/api/client'
 
-type Row = Record<string, string | number | null>
+type Cell = string | number | boolean | null
+type Row = Record<string, Cell>
 
 const ENDPOINT = '/api/core'
-const columns = ["岩心编号", "所属钻孔", "取样深度起", "取样深度止", "岩性描述", "采取率", "存放位置", "样本状态"]
-const actions = ["地质编录", "送样分析", "归还原箱"]
-const statuses = ["待编录", "已编录", "送样中", "已归还"]
-const stats = [{"label": "待编录岩心", "value": 0}, {"label": "送样中岩心", "value": 0}, {"label": "本月编录", "value": 0}]
+const columns = ['岩心编号', '所属钻孔', '取样深度起', '取样深度止', '岩性描述', '采取率', '存放位置', '样本状态']
+const statuses = ['待编录', '待复检', '已编录', '送样中', '已归还']
+const actionByStatus: Record<string, string[]> = {
+  待编录: ['地质编录'],
+  待复检: ['复检确认'],
+  已编录: ['送样分析'],
+  送样中: ['归还原箱'],
+  已归还: [],
+}
 
 const rows = ref<Row[]>([])
+const todoRows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
-const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
+const keyword = ref('')
+const statusFilter = ref('')
+
+const stats = computed(() => [
+  { label: '待编录', value: rows.value.filter((r) => r.status === '待编录').length },
+  { label: '待复检（编录待办）', value: todoRows.value.length },
+  { label: '送样中', value: rows.value.filter((r) => r.status === '送样中').length },
+  { label: '不合格台账', value: rows.value.filter((r) => r['检验结论'] === '不合格').length },
+])
+
+function actionsFor(status: Cell): string[] {
+  return actionByStatus[String(status)] ?? []
+}
+
+function stateClass(status: Cell): string {
+  if (status === '已编录' || status === '已归还') return 'tag-ok'
+  if (status === '待复检') return 'tag-warn'
+  if (status === '送样中') return 'tag-info'
+  return 'tag-idle'
+}
 
 function resetFilters() {
-  filters.value = {}
+  keyword.value = ''
+  statusFilter.value = ''
   void reload()
 }
 
@@ -90,37 +158,44 @@ function exportRows() {
   window.open(`${ENDPOINT}/export`, '_blank')
 }
 
-function openCreate() {
-  errorMessage.value = '岩心样本登记入口尚未接入审批流'
-}
-
 async function runAction(action: string, row: Row) {
   errorMessage.value = ''
   try {
-    const response = await request(`${ENDPOINT}/${row.id}/actions`, {
+    const response = await request(`${ENDPOINT}/${String(row.id)}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: { action } }),
     })
-    if (!response.ok) {
-      throw new Error('岩心管理动作未生效，请稍后重试')
-    }
+    const result = await response.json()
+    if (!result.ok) throw new Error(result.message)
     await reload()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '岩心管理操作失败'
+    errorMessage.value = error instanceof Error ? error.message : '岩心操作失败'
+  }
+}
+
+async function reloadTodos() {
+  try {
+    const response = await request(`${ENDPOINT}/review-todos`)
+    if (!response.ok) return
+    const payload = await response.json()
+    todoRows.value = payload.items ?? []
+  } catch {
+    todoRows.value = []
   }
 }
 
 async function reload() {
   errorMessage.value = ''
-  const query = new URLSearchParams(filters.value as Record<string, string>).toString()
+  const query = new URLSearchParams()
+  if (keyword.value) query.set('keyword', keyword.value)
+  if (statusFilter.value) query.set('status', statusFilter.value)
   try {
-    const response = await request(`${ENDPOINT}?${query}`)
-    if (!response.ok) {
-      throw new Error('岩心样本列表读取失败')
-    }
+    const response = await request(`${ENDPOINT}?${query.toString()}`)
+    if (!response.ok) throw new Error('岩心样本列表读取失败')
     const payload = await response.json()
     rows.value = payload.items ?? []
     total.value = payload.total ?? rows.value.length
+    await reloadTodos()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '岩心管理列表读取失败'
   }
